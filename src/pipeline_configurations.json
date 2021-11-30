@@ -1,0 +1,30 @@
+{
+    "mri_data": "pipeline_dataset.zip",
+    "participant_label": "sub-CON03",
+    "session_label": "ses-postop",
+    "task-label": "rest",
+    "parcellation": "destrieux",
+    "nr_of_cpus": 1,
+    "estimated_time": 10,
+    "mrtrix": true,
+    "mrtrix_parameters": {
+        "output_verbosity": "2",
+        "analysis_level": "preproc",
+        "analysis_level_config": {
+            "streamlines": 5,
+            "template_reg": "ants"
+        }
+    },
+    "fmriprep": true,
+    "fmriprep_parameters": {
+        "analysis_level": "participant",
+        "analysis_level_config": {
+      		"skip_bids_validation": false,
+        	"anat-only": true,
+        	"fs-no-reconall": true
+        }
+    },
+    "freesurfer": false,
+    "tvbconverter": true
+}
+
