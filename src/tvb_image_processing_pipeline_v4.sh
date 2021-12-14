@@ -510,7 +510,6 @@ webGUI_submit_main_jobs() {
     log "webGUI_submit_main_jobs(): Generating batch files for main job."
     
     # get walltime and containers specified with web GUI
-    walltime=$(python3 "$script_dir"/json_parser.py "$working_dir"/pipeline_configurations.json estimated_time)
     containers=$(python3 "$script_dir"/json_parser.py "$working_dir"/pipeline_configurations.json container)
 
     # initialize dependencies string
@@ -518,6 +517,8 @@ webGUI_submit_main_jobs() {
 
     # create job scripts
     for containername in $containers; do
+        walltime=$(python3 "$script_dir"/json_parser.py "$working_dir"/pipeline_configurations.json wall_time ${containername})
+
         # specify header of slurm batch job files
         head1=$(slurm_header_singularity ${containername} ${walltime})
 

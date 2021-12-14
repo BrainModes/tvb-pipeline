@@ -3,6 +3,7 @@ import sys
 
 json_file = sys.argv[1]
 call_arg = sys.argv[2]
+
 #json_file = "pipeline_configurations.json"
 #call_arg = "fmriprep"
 #call_arg = 'estimated_time'
@@ -49,6 +50,10 @@ with open(json_file) as f:
 # Build command lines
 if call_arg in ['participant_label', 'task-label', 'session_label', 'estimated_time', 'nr_of_cpus']:
     command_line = [data[call_arg]]
+elif call_arg in ['wall_time']:
+    call_arg2 = sys.argv[3]
+    if call_arg2 in keys['container']:
+        command_line = [data[call_arg2+"_parameters"][call_arg]]
 elif call_arg in ['container']:
     command_line = []
     for key in keys[call_arg]:
