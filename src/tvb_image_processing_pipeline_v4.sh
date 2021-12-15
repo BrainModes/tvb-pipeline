@@ -306,21 +306,24 @@ install_datalad() {
     # dependencies on a supercomputer without root
     # permissions is by using conda
     # FIXME: Version may change
-    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-    bash Miniconda3-latest-Linux-x86_64.sh
-    # acknowledge license, initialize Miniconda3, close and
-    # re-open shell
-    conda install -c conda-forge datalad
+    if [ ! -d "$HOME/miniconda-pipeline" ]; then
+      wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+      bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda-pipeline
+      # acknowledge license, initialize Miniconda3, close and
+      # re-open shell
+      export PATH="$HOME/miniconda-pipeline/bin:$PATH"
+      conda install -c conda-forge datalad
 
-    # DataLad extensions are required
-    pip install datalad-neuroimaging datalad-container
+      # DataLad extensions are required
+      pip install datalad-neuroimaging datalad-container
 
-    # Set up Git Identity
-    git config --global --add user.name "TVBPIPELINEservice"
-    git config --global --add user.email tvb_pipeline@ebrains.eu
+      # Set up Git Identity
+      git config --global --add user.name "TVBPIPELINEservice"
+      git config --global --add user.email tvb_pipeline@ebrains.eu
 
-    # delete installer
-    rm Miniconda3-latest-Linux-x86_64.sh
+      # delete installer
+      rm Miniconda3-latest-Linux-x86_64.sh
+    fi
 
     echo "install_datalad(): Done." >&2
     log "install_datalad(): Done."
@@ -418,22 +421,24 @@ slurm_header_singularity() {
 pull_containers_DataLad() {
     echo "pull_containers_DataLad(): Generating batch file to pull containers with DataLad." >&2
     log "pull_containers_DataLad(): Generating batch file to pull containers with DataLad."
-
+    if [ ! -d "$containerstore" ]; then
     # otherwise built may fail due to missing space in e.g. /tmp
-    mkdir "$containerstore"/tmp-singularity
-    mkdir "$containerstore"/tmp-singularity-cache
-    export SINGULARITY_TMPDIR="$containerstore"/tmp-singularity
-    export SINGULARITY_CACHEDIR="$containerstore"/tmp-singularity-cache
+    mkdir "$containerstore/tmp-singularity"
+    mkdir "$containerstore/tmp-singularity-cache"
+    export SINGULARITY_TMPDIR="$containerstore/tmp-singularity"
+    export SINGULARITY_CACHEDIR="$containerstore/tmp-singularity-cache"
 
     # specify header of slurm batch job files
     head1=$(slurm_header_singularity "coPull" "05:00:00")
 
     # create slurm batch job files
     cat <<EOF > pull_co.sh
-${head1}
 export SINGULARITY_CACHEDIR="$containerstore"/tmp-singularity-cache
 export SINGULARITY_TMPDIR="$containerstore"/tmp-singularity
-
+export PATH="$HOME/miniconda-pipeline/bin:$PATH"
+module purge
+module load daint-mc
+module load singularity
 
 # CAUTION: alternative pull/build may be necessary e.g.
 # singularity build /my_images/fmriprep-v1.3.2.simg docker://poldracklab/fmriprep:latest
@@ -466,7 +471,8 @@ EOF
     log "pull_containers_DataLad(): Slurm batch file generated. Submitting job..."
 
     # submit SLURM job files
-    sbatch pull_co.sh
+    /bin/sh pull_co.sh
+    fi
 
     echo "pull_containers_DataLad(): Job submitted. Removing batch file." >&2
     log "pull_containers_DataLad(): Job submitted. Removing batch file."
@@ -508,7 +514,7 @@ EOF
 webGUI_submit_main_jobs() {
     echo "webGUI_submit_main_jobs(): Generating batch files for main job." >&2
     log "webGUI_submit_main_jobs(): Generating batch files for main job."
-    
+
     # get walltime and containers specified with web GUI
     containers=$(python3 "$script_dir"/json_parser.py "$working_dir"/pipeline_configurations.json container)
 
@@ -551,6 +557,78 @@ EOF
 
     echo "webGUI_submit_main_jobs(): Done." >&2
     log "webGUI_submit_main_jobs(): Done."
+}
+
+# Create main job batch scripts
+webGUI_submit_main_jobs_mrtrix_tvbconverter() {
+    echo "webGUI_submit_main_jobs_mrtrix_tvbconverter(): Generating batch files for main job." >&2
+    log "webGUI_submit_main_jobs_mrtrix_tvbconverter(): Generating batch files for main job."
+
+    # get walltime and containers specified with web GUI
+    walltime=$(python3 "$script_dir"/json_parser.py "$working_dir"/pipeline_configurations.json estimated_time)
+    containers=$(python3 "$script_dir"/json_parser.py "$working_dir"/pipeline_configurations.json container)
+
+    # create job scripts
+    for containername in $containers; do
+        # create slurm batch job files
+        cat <<EOF > "${containername}"_job.sh
+/bin/sh ${script_path} -m 13 -p "$working_dir" -c "${containerstore}" -n ${containername}
+EOF
+    done
+
+    # submit jobs for containers except tvbconverter which depends on the others
+    for containername in $containers; do
+        # submit job with or without dependencies (tvbconverter depends on mrtrix and fmriprep)
+        if [ "$containername" = "mrtrix" ]; then
+            /bin/sh ${containername}_job.sh
+        fi
+    done
+    # echo "Dependencies: $dependencies"
+    # now submit job for tvbconverter (if requested from the web GUI)
+    for containername in $containers; do
+        if [ "$containername" = "tvbconverter" ]; then
+            /bin/sh ${containername}_job.sh
+        fi
+    done
+
+    echo "webGUI_submit_main_jobs_mrtrix_tvbconverter(): Done." >&2
+    log "webGUI_submit_main_jobs_mrtrix_tvbconverter(): Done."
+}
+
+# Create main job batch scripts
+webGUI_submit_main_jobs_fmriprep_tvbconverter() {
+    echo "webGUI_submit_main_jobs_mrtrix_tvbconverter(): Generating batch files for main job." >&2
+    log "webGUI_submit_main_jobs_mrtrix_tvbconverter(): Generating batch files for main job."
+
+    # get walltime and containers specified with web GUI
+    walltime=$(python3 "$script_dir"/json_parser.py "$working_dir"/pipeline_configurations.json estimated_time)
+    containers=$(python3 "$script_dir"/json_parser.py "$working_dir"/pipeline_configurations.json container)
+
+    # create job scripts
+    for containername in $containers; do
+        # create slurm batch job files
+        cat <<EOF > "${containername}"_job.sh
+/bin/sh ${script_path} -m 13 -p "$working_dir" -c "${containerstore}" -n ${containername}
+EOF
+    done
+
+    # submit jobs for containers except tvbconverter which depends on the others
+    for containername in $containers; do
+        # submit job with or without dependencies (tvbconverter depends on mrtrix and fmriprep)
+        if [ "$containername" = "fmriprep" ]; then
+            /bin/sh ${containername}_job.sh
+        fi
+    done
+    # echo "Dependencies: $dependencies"
+    # now submit job for tvbconverter (if requested from the web GUI)
+    for containername in $containers; do
+        if [ "$containername" = "tvbconverter" ]; then
+            /bin/sh ${containername}_job.sh
+        fi
+    done
+
+    echo "webGUI_submit_main_jobs_mrtrix_tvbconverter(): Done." >&2
+    log "webGUI_submit_main_jobs_mrtrix_tvbconverter(): Done."
 }
 
 
@@ -891,6 +969,7 @@ webGUI_create_analysis_dataset_DataLad() {
     module load singularity
     export SINGULARITY_CACHEDIR="$containerstore"/tmp-singularity-cache
     export SINGULARITY_TMPDIR="$containerstore"/tmp-singularity
+    export PATH="$HOME/miniconda-pipeline/bin:$PATH"
 
     #vvvvvvvvvvvvvvvv
     #DataLad workflow
@@ -943,6 +1022,7 @@ webGUI_create_analysis_dataset_DataLad() {
 webGUI_main_workflow() {
     log "webGUI_main_workflow(): Started..."
     echo "webGUI_main_workflow(): Started..."
+    export PATH="$HOME/miniconda-pipeline/bin:$PATH"
 
     # get BIDS sub-id and ses-id
     subid=$(python3 "$script_dir"/json_parser.py "$working_dir"/pipeline_configurations.json participant_label)
@@ -1114,6 +1194,19 @@ main() {
     # create compute job from webGUI
     if ((mode == 12)); then
         webGUI_submit_main_jobs
+        exit 0
+    fi
+
+    # case: mrtrix, tvbconverter
+    # create compute job from webGUI
+    if ((mode == 9)); then
+        webGUI_submit_main_jobs_mrtrix_tvbconverter
+        exit 0
+    fi
+    # case: fmriprep, tvbconverter
+    # create compute job from webGUI
+    if ((mode == 10)); then
+        webGUI_submit_main_jobs_fmriprep_tvbconverter
         exit 0
     fi
 
