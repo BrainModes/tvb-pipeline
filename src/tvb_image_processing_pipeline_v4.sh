@@ -565,7 +565,6 @@ webGUI_submit_main_jobs_mrtrix_tvbconverter() {
     log "webGUI_submit_main_jobs_mrtrix_tvbconverter(): Generating batch files for main job."
 
     # get walltime and containers specified with web GUI
-    walltime=$(python3 "$script_dir"/json_parser.py "$working_dir"/pipeline_configurations.json estimated_time)
     containers=$(python3 "$script_dir"/json_parser.py "$working_dir"/pipeline_configurations.json container)
 
     # create job scripts
@@ -601,7 +600,6 @@ webGUI_submit_main_jobs_fmriprep_tvbconverter() {
     log "webGUI_submit_main_jobs_mrtrix_tvbconverter(): Generating batch files for main job."
 
     # get walltime and containers specified with web GUI
-    walltime=$(python3 "$script_dir"/json_parser.py "$working_dir"/pipeline_configurations.json estimated_time)
     containers=$(python3 "$script_dir"/json_parser.py "$working_dir"/pipeline_configurations.json container)
 
     # create job scripts
